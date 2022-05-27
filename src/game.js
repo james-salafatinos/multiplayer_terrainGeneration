@@ -1,9 +1,8 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.112.1/build/three.module.js';
-import {WEBGL} from 'https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/WebGL.js';
-import {graphics} from './graphics.js';
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.112.1/build/three.module.js";
+import { WEBGL } from "https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/WebGL.js";
+import { graphics } from "./graphics.js";
 
-
-export const game = (function() {
+export const game = (function () {
   return {
     Game: class {
       constructor() {
@@ -13,7 +12,7 @@ export const game = (function() {
       _Initialize() {
         this._graphics = new graphics.Graphics(this);
         if (!this._graphics.Initialize()) {
-          this._DisplayError('WebGL2 is not available.');
+          this._DisplayError("WebGL2 is not available.");
           return;
         }
 
@@ -26,7 +25,7 @@ export const game = (function() {
       }
 
       _DisplayError(errorText) {
-        const error = document.getElementById('error');
+        const error = document.getElementById("error");
         error.innerText = errorText;
       }
 
@@ -35,6 +34,8 @@ export const game = (function() {
           if (this._previousRAF === null) {
             this._previousRAF = t;
           }
+
+          // this._controls.update(time, prevTime);
           this._Render(t - this._previousRAF);
           this._previousRAF = t;
         });
@@ -55,6 +56,6 @@ export const game = (function() {
 
         this._RAF();
       }
-    }
+    },
   };
 })();

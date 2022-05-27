@@ -1,18 +1,19 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.112.1/build/three.module.js';
-import {GUI} from 'https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/libs/dat.gui.module.js';
-import {Sky} from 'https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/objects/Sky.js';
-import {game} from './game.js';
-import {graphics} from './graphics.js';
-import {math} from './math.js';
-import {noise} from './noise.js';
-import {spline} from './spline.js';
-import {textures} from './textures.js';
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.112.1/build/three.module.js";
+import { GUI } from "https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/libs/dat.gui.module.js";
+import { Sky } from "https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/objects/Sky.js";
+import { game } from "./game.js";
+import { graphics } from "./graphics.js";
+import { math } from "./math.js";
+import { noise } from "./noise.js";
+import { spline } from "./spline.js";
+import { textures } from "./textures.js";
 
-import {OrbitControls} from 'https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/controls/OrbitControls.js';
+import { io } from "https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.esm.min.js";
+import { MultiplayerSubsystemClient } from "./MultiplayerSubsystemClient.js";
 
+import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/controls/OrbitControls.js";
 
 let _APP = null;
-
 
 class HeightGenerator {
   constructor(generator, position, minRadius, maxRadius) {
@@ -23,8 +24,11 @@ class HeightGenerator {
 
   Get(x, y) {
     const distance = this._position.distanceTo(new THREE.Vector2(x, y));
-    let normalization = 1.0 - math.sat(
-        (distance - this._radius[0]) / (this._radius[1] - this._radius[0]));
+    let normalization =
+      1.0 -
+      math.sat(
+        (distance - this._radius[0]) / (this._radius[1] - this._radius[0])
+      );
     normalization = normalization * normalization * (3 - 2 * normalization);
 
     return [this._generator.Get(x, y), normalization];
@@ -32,8 +36,7 @@ class HeightGenerator {
 }
 
 class FlaredCornerHeightGenerator {
-  constructor() {
-  }
+  constructor() {}
 
   Get(x, y) {
     if (x == -250 && y == 250) {
@@ -43,10 +46,8 @@ class FlaredCornerHeightGenerator {
   }
 }
 
-
 class BumpHeightGenerator {
-  constructor() {
-  }
+  constructor() {}
 
   Get(x, y) {
     const dist = new THREE.Vector2(x, y).distanceTo(new THREE.Vector2(0, 0));
@@ -57,7 +58,6 @@ class BumpHeightGenerator {
     return [h * 128, 1];
   }
 }
-
 
 class Heightmap {
   constructor(params, img) {
@@ -70,7 +70,7 @@ class Heightmap {
       const position = (x + this._data.width * y) * 4;
       const data = this._data.data;
       return data[position] / 255.0;
-    }
+    };
 
     // Bilinear filter
     const offset = new THREE.Vector2(-250, -250);
@@ -101,8 +101,6 @@ class Heightmap {
   }
 }
 
-
-
 class TerrainChunk {
   constructor(params) {
     this._params = params;
@@ -111,16 +109,20 @@ class TerrainChunk {
 
   _Init(params) {
     const size = new THREE.Vector3(
-        params.width * params.scale, 0, params.width * params.scale);
+      params.width * params.scale,
+      0,
+      params.width * params.scale
+    );
 
     this._plane = new THREE.Mesh(
-        new THREE.PlaneGeometry(size.x, size.z, 128, 128),
-        new THREE.MeshStandardMaterial({
-            wireframe: false,
-            color: 0xFFFFFF,
-            side: THREE.FrontSide,
-            vertexColors: THREE.VertexColors,
-        }));
+      new THREE.PlaneGeometry(size.x, size.z, 128, 128),
+      new THREE.MeshStandardMaterial({
+        wireframe: false,
+        color: 0xffffff,
+        side: THREE.FrontSide,
+        vertexColors: THREE.VertexColors,
+      })
+    );
     this._plane.position.add(params.offset);
     this._plane.castShadow = false;
     this._plane.receiveShadow = true;
@@ -137,34 +139,38 @@ class TerrainChunk {
       v.z = 0;
       for (let gen of this._params.heightGenerators) {
         heightPairs.push(gen.Get(v.x + offset.x, v.y + offset.y));
-        normalization += heightPairs[heightPairs.length-1][1];
+        normalization += heightPairs[heightPairs.length - 1][1];
       }
 
       if (normalization > 0) {
         for (let h of heightPairs) {
-          v.z += h[0] * h[1] / normalization;
+          v.z += (h[0] * h[1]) / normalization;
         }
       }
     }
 
     // DEMO
-    if (this._params.heightGenerators.length > 1 && offset.x == 0 && offset.y == 0) {
+    if (
+      this._params.heightGenerators.length > 1 &&
+      offset.x == 0 &&
+      offset.y == 0
+    ) {
       const gen = this._params.heightGenerators[0];
       const maxHeight = 16.0;
       const GREEN = new THREE.Color(0x46b00c);
 
       for (let f of this._plane.geometry.faces) {
         const vs = [
-            this._plane.geometry.vertices[f.a],
-            this._plane.geometry.vertices[f.b],
-            this._plane.geometry.vertices[f.c]
+          this._plane.geometry.vertices[f.a],
+          this._plane.geometry.vertices[f.b],
+          this._plane.geometry.vertices[f.c],
         ];
 
         const vertexColours = [];
         for (let v of vs) {
           const [h, _] = gen.Get(v.x + offset.x, v.y + offset.y);
           const a = math.sat(h / maxHeight);
-          const vc = new THREE.Color(0xFFFFFF);
+          const vc = new THREE.Color(0xffffff);
           vc.lerp(GREEN, a);
 
           vertexColours.push(vc);
@@ -175,12 +181,11 @@ class TerrainChunk {
     } else {
       for (let f of this._plane.geometry.faces) {
         f.vertexColors = [
-            new THREE.Color(0xFFFFFF),
-            new THREE.Color(0xFFFFFF),
-            new THREE.Color(0xFFFFFF),
+          new THREE.Color(0xffffff),
+          new THREE.Color(0xffffff),
+          new THREE.Color(0xffffff),
         ];
       }
-
     }
     this._plane.geometry.verticesNeedUpdate = true;
     this._plane.geometry.computeVertexNormals();
@@ -191,6 +196,10 @@ class TerrainChunkManager {
   constructor(params) {
     this._chunkSize = 500;
     this._Init(params);
+
+    this._MultiplayerSubsystemClientHandler = new MultiplayerSubsystemClient(
+      io
+    );
   }
 
   _Init(params) {
@@ -206,31 +215,46 @@ class TerrainChunkManager {
       exponentiation: 3.9,
       height: 64,
       scale: 256.0,
-      noiseType: 'simplex',
-      seed: 1
+      noiseType: "simplex",
+      seed: 1,
     };
 
     const onNoiseChanged = () => {
+      console.log("Noise Changed");
       for (let k in this._chunks) {
         this._chunks[k].chunk.Rebuild();
       }
+
+      this._MultiplayerSubsystemClientHandler.emit(
+        "guiParamsState",
+        params.guiParams
+      );
+
+      console.log("Main.js", params.guiParams);
     };
 
-    const noiseRollup = params.gui.addFolder('Terrain.Noise');
-    noiseRollup.add(params.guiParams.noise, "noiseType", ['simplex', 'perlin']).onChange(
-        onNoiseChanged);
-    noiseRollup.add(params.guiParams.noise, "scale", 64.0, 1024.0).onChange(
-        onNoiseChanged);
-    noiseRollup.add(params.guiParams.noise, "octaves", 1, 20, 1).onChange(
-        onNoiseChanged);
-    noiseRollup.add(params.guiParams.noise, "persistence", 0.01, 1.0).onChange(
-        onNoiseChanged);
-    noiseRollup.add(params.guiParams.noise, "lacunarity", 0.01, 4.0).onChange(
-        onNoiseChanged);
-    noiseRollup.add(params.guiParams.noise, "exponentiation", 0.1, 10.0).onChange(
-        onNoiseChanged);
-    noiseRollup.add(params.guiParams.noise, "height", 0, 256).onChange(
-        onNoiseChanged);
+    const noiseRollup = params.gui.addFolder("Terrain.Noise");
+    noiseRollup
+      .add(params.guiParams.noise, "noiseType", ["simplex", "perlin"])
+      .onChange(onNoiseChanged);
+    noiseRollup
+      .add(params.guiParams.noise, "scale", 64.0, 1024.0)
+      .onChange(onNoiseChanged);
+    noiseRollup
+      .add(params.guiParams.noise, "octaves", 1, 20, 1)
+      .onChange(onNoiseChanged);
+    noiseRollup
+      .add(params.guiParams.noise, "persistence", 0.01, 1.0)
+      .onChange(onNoiseChanged);
+    noiseRollup
+      .add(params.guiParams.noise, "lacunarity", 0.01, 4.0)
+      .onChange(onNoiseChanged);
+    noiseRollup
+      .add(params.guiParams.noise, "exponentiation", 0.1, 10.0)
+      .onChange(onNoiseChanged);
+    noiseRollup
+      .add(params.guiParams.noise, "height", 0, 256)
+      .onChange(onNoiseChanged);
 
     this._noise = new noise.Noise(params.guiParams.noise);
 
@@ -238,24 +262,26 @@ class TerrainChunkManager {
       height: 16,
     };
 
-    const heightmapRollup = params.gui.addFolder('Terrain.Heightmap');
-    heightmapRollup.add(params.guiParams.heightmap, "height", 0, 128).onChange(
-        onNoiseChanged);
+    const heightmapRollup = params.gui.addFolder("Terrain.Heightmap");
+    heightmapRollup
+      .add(params.guiParams.heightmap, "height", 0, 128)
+      .onChange(onNoiseChanged);
   }
 
   _InitTerrain(params) {
-    params.guiParams.terrain= {
+    params.guiParams.terrain = {
       wireframe: false,
     };
 
-    this._group = new THREE.Group()
+    this._group = new THREE.Group();
     this._group.rotation.x = -Math.PI / 2;
     params.scene.add(this._group);
 
-    const terrainRollup = params.gui.addFolder('Terrain');
+    const terrainRollup = params.gui.addFolder("Terrain");
     terrainRollup.add(params.guiParams.terrain, "wireframe").onChange(() => {
       for (let k in this._chunks) {
-        this._chunks[k].chunk._plane.material.wireframe = params.guiParams.terrain.wireframe;
+        this._chunks[k].chunk._plane.material.wireframe =
+          params.guiParams.terrain.wireframe;
       }
     });
 
@@ -273,7 +299,7 @@ class TerrainChunkManager {
   }
 
   _Key(x, z) {
-    return x + '.' + z;
+    return x + "." + z;
   }
 
   _AddChunk(x, z) {
@@ -283,7 +309,9 @@ class TerrainChunkManager {
       offset: new THREE.Vector3(offset.x, offset.y, 0),
       scale: 1,
       width: this._chunkSize,
-      heightGenerators: [new HeightGenerator(this._noise, offset, 100000, 100000 + 1)],
+      heightGenerators: [
+        new HeightGenerator(this._noise, offset, 100000, 100000 + 1),
+      ],
     });
 
     const k = this._Key(x, z);
@@ -299,14 +327,17 @@ class TerrainChunkManager {
 
     this._chunks[k] = {
       chunk: chunk,
-      edges: edges
+      edges: edges,
     };
   }
 
   SetHeightmap(img) {
     const heightmap = new HeightGenerator(
-        new Heightmap(this._params.guiParams.heightmap, img),
-        new THREE.Vector2(0, 0), 250, 300);
+      new Heightmap(this._params.guiParams.heightmap, img),
+      new THREE.Vector2(0, 0),
+      250,
+      300
+    );
 
     for (let k in this._chunks) {
       this._chunks[k].chunk._params.heightGenerators.unshift(heightmap);
@@ -314,10 +345,8 @@ class TerrainChunkManager {
     }
   }
 
-  Update(timeInSeconds) {
-  }
+  Update(timeInSeconds) {}
 }
-
 
 class TerrainSky {
   constructor(params) {
@@ -360,33 +389,39 @@ class TerrainSky {
       sunPosition.y = Math.sin(phi) * Math.sin(theta);
       sunPosition.z = Math.sin(phi) * Math.cos(theta);
 
-      this._sky.material.uniforms['sunPosition'].value.copy(sunPosition);
+      this._sky.material.uniforms["sunPosition"].value.copy(sunPosition);
     };
 
-    const skyRollup = params.gui.addFolder('Sky');
-    skyRollup.add(params.guiParams.sky, "turbidity", 0.1, 30.0).onChange(
-        onShaderChange);
-    skyRollup.add(params.guiParams.sky, "rayleigh", 0.1, 4.0).onChange(
-        onShaderChange);
-    skyRollup.add(params.guiParams.sky, "mieCoefficient", 0.0001, 0.1).onChange(
-        onShaderChange);
-    skyRollup.add(params.guiParams.sky, "mieDirectionalG", 0.0, 1.0).onChange(
-        onShaderChange);
-    skyRollup.add(params.guiParams.sky, "luminance", 0.0, 2.0).onChange(
-        onShaderChange);
+    const skyRollup = params.gui.addFolder("Sky");
+    skyRollup
+      .add(params.guiParams.sky, "turbidity", 0.1, 30.0)
+      .onChange(onShaderChange);
+    skyRollup
+      .add(params.guiParams.sky, "rayleigh", 0.1, 4.0)
+      .onChange(onShaderChange);
+    skyRollup
+      .add(params.guiParams.sky, "mieCoefficient", 0.0001, 0.1)
+      .onChange(onShaderChange);
+    skyRollup
+      .add(params.guiParams.sky, "mieDirectionalG", 0.0, 1.0)
+      .onChange(onShaderChange);
+    skyRollup
+      .add(params.guiParams.sky, "luminance", 0.0, 2.0)
+      .onChange(onShaderChange);
 
-    const sunRollup = params.gui.addFolder('Sun');
-    sunRollup.add(params.guiParams.sun, "inclination", 0.0, 1.0).onChange(
-        onSunChange);
-    sunRollup.add(params.guiParams.sun, "azimuth", 0.0, 1.0).onChange(
-        onSunChange);
+    const sunRollup = params.gui.addFolder("Sun");
+    sunRollup
+      .add(params.guiParams.sun, "inclination", 0.0, 1.0)
+      .onChange(onSunChange);
+    sunRollup
+      .add(params.guiParams.sun, "azimuth", 0.0, 1.0)
+      .onChange(onSunChange);
 
     onShaderChange();
     onSunChange();
   }
 
-  Update(timeInSeconds) {
-  }
+  Update(timeInSeconds) {}
 }
 
 class ProceduralTerrain_Demo extends game.Game {
@@ -395,57 +430,73 @@ class ProceduralTerrain_Demo extends game.Game {
   }
 
   _OnInitialize() {
+    this._frameIndex = 0;
     this._textures = new textures.TextureAtlas(this);
     this._textures.onLoad = () => {};
-    this._controls = this._CreateControls();
+    // this._controls = this._CreateControls();
     this._CreateGUI();
 
-    this._entities['_terrain'] = new TerrainChunkManager({
+    this._entities["_terrain"] = new TerrainChunkManager({
       scene: this._graphics.Scene,
       gui: this._gui,
       guiParams: this._guiParams,
     });
 
-    this._entities['_sky'] = new TerrainSky({
+    this._entities["_sky"] = new TerrainSky({
       scene: this._graphics.Scene,
       gui: this._gui,
       guiParams: this._guiParams,
     });
+
+    this._MultiplayerSubsystemClientHandler = new MultiplayerSubsystemClient(
+      io
+    );
+
     this._LoadBackground();
   }
 
   _CreateGUI() {
     this._guiParams = {
-      general: {
-      },
+      general: {},
     };
     this._gui = new GUI();
 
-    const generalRollup = this._gui.addFolder('General');
+    const generalRollup = this._gui.addFolder("General");
     this._gui.close();
-  }
-
-  _CreateControls() {
-    const controls = new OrbitControls(
-        this._graphics._camera, this._graphics._threejs.domElement);
-    controls.target.set(0, 50, 0);
-    controls.object.position.set(475, 345, 900);
-    controls.update();
-    return controls;
   }
 
   _LoadBackground() {
     const loader = new THREE.TextureLoader(this._manager);
 
-    loader.load('./resources/heightmap-simondev.jpg', (result) => {
-      this._entities['_terrain'].SetHeightmap(result.image);
+    loader.load("./resources/heightmap-simondev.jpg", (result) => {
+      this._entities["_terrain"].SetHeightmap(result.image);
     });
   }
 
   _OnStep(timeInSeconds) {
+    if (this._frameIndex % 100 == 0) {
+      console.log(this._MultiplayerSubsystemClientHandler);
+      // console.log("Starting params", this._guiParams);
+
+      if (this._MultiplayerSubsystemClientHandler.gameParamState != null) {
+        this._guiParams =
+          this._MultiplayerSubsystemClientHandler.gameParamState;
+
+        console.log(this);
+      }
+    }
+
+    // if (!this._MultiplayerSubsystemClientHandler.gameParamState == null) {
+    //   console.log(
+    //     "To Change params",
+    //     this._MultiplayerSubsystemClientHandler.gameParamState
+    //   );
+    //   this._guiParams = this._MultiplayerSubsystemClientHandler.gameParamState;
+    // }
+
+    this._frameIndex += 1;
   }
 }
-
 
 function _Main() {
   _APP = new ProceduralTerrain_Demo();

@@ -1,16 +1,20 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.112.1/build/three.module.js';
-import Stats from 'https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/libs/stats.module.js';
-import {WEBGL} from 'https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/WebGL.js';
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.112.1/build/three.module.js";
+import Stats from "https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/libs/stats.module.js";
+import { WEBGL } from "https://cdn.jsdelivr.net/npm/three@0.112.1/examples/jsm/WebGL.js";
 
+import { NoClipControls } from "./NoClipControls.js";
 
-export const graphics = (function() {
+import { io } from "https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.esm.min.js";
+import { MultiplayerSubsystemClient } from "./MultiplayerSubsystemClient.js";
+import { MultiplayerGameInterface } from "./MultiplayerGameInterface.js";
 
+export const graphics = (function () {
   function _GetImageData(image) {
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = image.width;
     canvas.height = image.height;
 
-    const context = canvas.getContext( '2d' );
+    const context = canvas.getContext("2d");
     context.drawImage(image, 0, 0);
 
     return context.getImageData(0, 0, image.width, image.height);
@@ -20,16 +24,15 @@ export const graphics = (function() {
     const position = (x + imagedata.width * y) * 4;
     const data = imagedata.data;
     return {
-        r: data[position],
-        g: data[position + 1],
-        b: data[position + 2],
-        a: data[position + 3]
+      r: data[position],
+      g: data[position + 1],
+      b: data[position + 2],
+      a: data[position + 3],
     };
   }
 
   class _Graphics {
-    constructor(game) {
-    }
+    constructor(game) {}
 
     Initialize() {
       if (!WEBGL.isWebGL2Available()) {
@@ -37,20 +40,25 @@ export const graphics = (function() {
       }
 
       this._threejs = new THREE.WebGLRenderer({
-          antialias: true,
+        antialias: true,
       });
       this._threejs.setPixelRatio(window.devicePixelRatio);
       this._threejs.setSize(window.innerWidth, window.innerHeight);
 
-      const target = document.getElementById('target');
+      const target = document.getElementById("target");
       target.appendChild(this._threejs.domElement);
 
       this._stats = new Stats();
-      //target.appendChild(this._stats.dom);
 
-      window.addEventListener('resize', () => {
-        this._OnWindowResize();
-      }, false);
+      this.prevTime;
+
+      window.addEventListener(
+        "resize",
+        () => {
+          this._OnWindowResize();
+        },
+        false
+      );
 
       const fov = 60;
       const aspect = 1920 / 1080;
@@ -61,6 +69,22 @@ export const graphics = (function() {
 
       this._scene = new THREE.Scene();
       this._scene.background = new THREE.Color(0xaaaaaa);
+
+      this._controls = new NoClipControls(
+        this._scene,
+        window,
+        this._camera,
+        this._threejs.domElement
+      );
+
+      this._MultiplayerSubsystemClientHandler = new MultiplayerSubsystemClient(
+        io
+      );
+      this._MultiplayerGameInterfaceHandler = new MultiplayerGameInterface(
+        this._scene,
+        this._camera,
+        this._MultiplayerSubsystemClientHandler
+      );
 
       this._CreateLights();
 
@@ -96,8 +120,19 @@ export const graphics = (function() {
     }
 
     Render(timeInSeconds) {
+      const time = performance.now();
       this._threejs.render(this._scene, this._camera);
       this._stats.update();
+      this._controls.update(time, this.prevTime);
+
+      this._MultiplayerGameInterfaceHandler.updatePlayerState();
+      this._MultiplayerSubsystemClientHandler.emit(
+        "PlayerState",
+        this._MultiplayerGameInterfaceHandler.playerState
+      );
+      this._MultiplayerGameInterfaceHandler.CheckForNewPlayersAndAddThemOrUpdatePositions();
+
+      this.prevTime = time;
     }
   }
 
